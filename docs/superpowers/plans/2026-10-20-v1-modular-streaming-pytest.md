@@ -551,12 +551,13 @@ def test_write_read_list_roundtrip(tmp_path):
         "read_file", json.dumps({"path": str(target)})
     ) == ("码苗", False)
 
+    (tmp_path / "top.txt").write_text("top", encoding="utf-8")
     (tmp_path / "sub").mkdir()
     listed, is_error = registry.execute(
         "list_files", json.dumps({"path": str(tmp_path)})
     )
     assert not is_error
-    assert "hello.txt" in listed and "sub/" in listed
+    assert set(listed.splitlines()) == {"nested/", "sub/", "top.txt"}
 
 
 def test_run_shell_nonzero_exit_is_not_an_error():
@@ -811,6 +812,8 @@ def list_files(path: str = ".") -> str:
     Args:
         path: 目录路径,默认为当前目录。
     """
+    # 只列一层,不做递归:没有输出截断之前(v3 才做),递归遍历大仓库
+    # 可能一次把上下文撑爆;要看深层结构,模型可以自己再列下一层。
     with os.scandir(path) as entries:
         names = sorted(
             entry.name + ("/" if entry.is_dir() else "") for entry in entries
@@ -851,7 +854,7 @@ def run_shell(command: str) -> str:
 - [ ] **Step 6: 运行测试确认通过**
 
 Run: `.venv/bin/python -m pytest tests/test_tools.py -v`
-Expected: 8 passed
+Expected: 9 passed
 
 - [ ] **Step 7: 离线自检注册表(不花 API 费)**
 
@@ -1045,7 +1048,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from .client import AssistantTurn, ChatClient, TextCallback
+from .client import ChatClient, TextCallback
 from .config import MAX_ROUNDS, SYSTEM_PROMPT
 from .tools import ToolRegistry, registry as default_registry
 
