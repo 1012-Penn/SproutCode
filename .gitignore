@@ -11,3 +11,4 @@ build/
 
 # tooling
 .pytest_cache/
+.zcode/
