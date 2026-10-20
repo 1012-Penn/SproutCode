@@ -1,4 +1,4 @@
-# CodeSprout(码苗)设计文档
+# SproutCode(码苗)设计文档
 
 日期:2026-10-20
 状态:已与作者确认设计,待实现
@@ -7,7 +7,7 @@
 
 ## 1. 项目定位
 
-CodeSprout(码苗)是一个用 Python 从零实现的终端 Coding Agent,以**渐进演进**的方式构建:从单文件最小闭环开始,逐步重构生长为具备子 Agent、MCP 协议、测试驱动自修复能力的完整 Agent。
+SproutCode(码苗)是一个用 Python 从零实现的终端 Coding Agent,以**渐进演进**的方式构建:从单文件最小闭环开始,逐步重构生长为具备子 Agent、MCP 协议、测试驱动自修复能力的完整 Agent。
 
 双重目的:
 
@@ -31,12 +31,12 @@ CodeSprout(码苗)是一个用 Python 从零实现的终端 Coding Agent,以**�
 
 | 阶段 | 主题 | 核心交付 | 验收标准 |
 |------|------|----------|----------|
-| v0 | 单文件最小闭环 | `codesprout.py`(~200 行):DeepSeek 客户端 + Agent 循环 + 3 工具(read_file / write_file / run_shell)+ 简单 REPL,非流式 | 对话中让 Agent 创建文件并执行 shell 命令,全程不退出 REPL |
-| v1 | 模块化重构 | 拆 `codesprout/` 包(client / agent / tools / cli / config 分离);流式输出;`@tool` 装饰器 + JSON Schema 自动生成;pytest 基建(FakeLLM) | 功能与 v0 等价;工具注册表单测通过;流式文本与工具调用过程可视化 |
+| v0 | 单文件最小闭环 | `sproutcode.py`(~200 行):DeepSeek 客户端 + Agent 循环 + 3 工具(read_file / write_file / run_shell)+ 简单 REPL,非流式 | 对话中让 Agent 创建文件并执行 shell 命令,全程不退出 REPL |
+| v1 | 模块化重构 | 拆 `sproutcode/` 包(client / agent / tools / cli / config 分离);流式输出;`@tool` 装饰器 + JSON Schema 自动生成;pytest 基建(FakeLLM) | 功能与 v0 等价;工具注册表单测通过;流式文本与工具调用过程可视化 |
 | v2 | 会话与上下文 | 会话 JSONL 落盘、`--resume` 恢复;斜杠命令(/help /clear /resume);token 近似计数 + 上下文压缩(超预算摘要旧消息);系统提示词外置 | 重启后恢复完整对话;构造超长会话触发压缩且 Agent 仍能引用早期关键信息 |
 | v3 | 权限与安全 | 危险命令 y/n 审批;项目根路径限制(拒绝越界读写);shell 超时与输出截断 | 越界路径被拒;`rm -rf` 类命令必须人工确认;长输出被截断不撑爆上下文 |
 | v4 | 子 Agent | Task 工具派生子 Agent:独立 messages、受限工具集、非交互模式、仅回传最终文本;支持并行 fan-out | 给一个多文件任务,子 Agent 各自完成搜索/修改,主 Agent 汇总;总 token 消耗低于单 Agent 对照 |
-| v5 | MCP 协议 | MCP stdio 客户端;外部 server 工具动态发现并并入注册表;`.codesprout.json` 配置 | 接入一个现成 MCP server(如 filesystem),其工具可被 Agent 调用 |
+| v5 | MCP 协议 | MCP stdio 客户端;外部 server 工具动态发现并并入注册表;`.sproutcode.json` 配置 | 接入一个现成 MCP server(如 filesystem),其工具可被 Agent 调用 |
 | v6 | 测试驱动自修复 | 工作流:写码 → 跑测试 → 读失败输出 → 自动修复,循环上限 N 轮 | 预置一个带失败测试的小项目,Agent 在 N 轮内修复到全绿 |
 | v7 | 打磨发布 | README + 架构图、安装体验、demo、小型评估任务集(跑通率统计) | 评估集跑通率报告生成;新人按 README 可 10 分钟内跑起来 |
 
@@ -49,9 +49,9 @@ CodeSprout(码苗)是一个用 Python 从零实现的终端 Coding Agent,以**�
 ### 4.1 包结构(v1 形态,v2+ 在此之上生长)
 
 ```
-codesprout/
+sproutcode/
 ├── __init__.py
-├── __main__.py          # python -m codesprout 入口
+├── __main__.py          # python -m sproutcode 入口
 ├── cli.py               # REPL 循环、斜杠命令、ANSI 渲染
 ├── agent.py             # Agent 循环:消息历史 + 工具调度
 ├── client.py            # LLM 客户端(OpenAI 兼容,DeepSeek/任意端点)
