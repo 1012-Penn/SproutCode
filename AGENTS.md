@@ -1,0 +1,39 @@
+# AGENTS.md — SproutCode(码苗)工作指南
+
+> 新会话先读这份,避免重复踩坑。项目权威 spec 见 `docs/superpowers/specs/2026-10-20-sproutcode-design.md`。
+
+## 项目与进度
+
+- 从零实现的终端 Coding Agent(Python 3.10+),**渐进演进**:每版本独立可运行、打 tag、配演进笔记。
+- 里程碑路线:v0 单文件闭环 → v1 模块化+流式+pytest → v2 会话/上下文 → v3 权限安全 → v4 子 Agent → v5 MCP → v6 自修复 → v7 发布。
+- 进度**以 `git tag` 与 `docs/journey/` 为准**(本文件不逐次更新):v0 已完成并真机验收通过,tag `v0`。
+
+## 必须遵守的工作流(spec §3)
+
+1. 每个里程碑独立走一轮:**实现计划 → 开发 → 测试 → 验收 → tag → 演进笔记**;不做跨里程碑的大批量实现。
+2. 计划存 `docs/superpowers/plans/YYYY-MM-DD-vN-*.md`;演进笔记存 `docs/journey/vN-<主题>.md`,固定三段:改了什么 / 为什么 / 踩坑与收获(写给人读,不写营销话术)。
+3. 单 main 线持续重构,直接在 main 提交;周期结束 `git push origin main --tags`(origin = https://github.com/1012-Penn/SproutCode.git)。
+4. 提交信息:`feat:` / `docs:` / `chore:` + 中文短语。
+
+## 技术约定
+
+- 运行时依赖**仅 openai SDK**,CLI 用标准库——这是可讲的工程决策,新增依赖要有强理由。
+- 虚拟环境 `.venv/`(Python 3.10.12,openai 已装):一律用 `.venv/bin/python` 执行。
+- LLM:OpenAI 兼容协议接 DeepSeek(仓库内常量 `BASE_URL`/`MODEL`);API Key 从环境变量或 `/root/.env` 的 `DEEPSEEK_API_KEY` 读取,**永不入库**。
+- 工具结果统一 `(content, is_error)`,异常转错误文本回传模型;单任务轮数上限 25。
+- 真机验收用管道喂 REPL(可复现、可留档):`printf '...' | .venv/bin/python sproutcode.py`。
+- 离线自检不花 API 费:import 模块后直接断言工具层行为(范式见各里程碑计划文档)。
+
+## 已踩过的坑(别再走)
+
+- **`.zcode/agents/*.md` 自定义代理定义在当前会话不生效**:代理注册表在会话启动时固定,新建定义要到下个会话才可见。实测过,别再试。
+- 分工偏好(用户指定):**机械性工作派通用子智能体(general-purpose)**——照既定规范写文件、跑自检、起草文档;主会话负责对照审查、验收门禁与 git 操作。子代理产出必须经主会话 diff/审查后才提交。不指定 Flash 模型、不动用 workflow,除非用户明确要求。
+- 带 tool_calls 的 assistant 消息必须原样入历史,每个 `tool_call_id` 都要有对应 `role=tool` 回复,否则下一轮请求直接 400;任务中断/失败要把 messages 回退到本轮 user 消息之前(sproutcode.py 的 `task_start` 机制,v1 拆包时必须保留该语义)。
+- 代码注释风格(用户指定):**教学向、以代码块为单位**,讲"为什么这么设计",不逐句注释。
+- 不入库目录已由 .gitignore 覆盖:`.venv/`、`.zcode/`、`__pycache__/`、`.env`;验收用的临时产物(sprout-demo/ 等)验收后即清理。
+
+## 文档地图
+
+- `docs/superpowers/specs/` — 设计文档(权威)
+- `docs/superpowers/plans/` — 各里程碑实现计划
+- `docs/journey/` — 演进笔记(面试叙述底稿)
