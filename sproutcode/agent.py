@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Callable
 
 from .client import ChatClient, TextCallback
-from .config import MAX_ROUNDS, SYSTEM_PROMPT
+from .config import MAX_ROUNDS
+from .prompts import load as load_prompt
 from .tools import ToolRegistry, registry as default_registry
 
 ToolCallCallback = Callable[[str, str], None]
@@ -19,12 +20,22 @@ class Agent:
         *,
         registry: ToolRegistry | None = None,
         max_rounds: int = MAX_ROUNDS,
-        system_prompt: str = SYSTEM_PROMPT,
+        system_prompt: str | None = None,
     ) -> None:
         self.client = client
         self.registry = registry or default_registry
         self.max_rounds = max_rounds
-        self.messages: list[dict] = [{"role": "system", "content": system_prompt}]
+        # 提示词外置:默认读 prompts/system.txt,改提示词不用动代码。
+        self.messages: list[dict] = [
+            {
+                "role": "system",
+                "content": (
+                    system_prompt
+                    if system_prompt is not None
+                    else load_prompt("system")
+                ),
+            }
+        ]
 
     def run(
         self,

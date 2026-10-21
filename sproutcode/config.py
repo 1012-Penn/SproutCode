@@ -10,13 +10,11 @@ MAX_ROUNDS = 25           # 单任务工具调用轮数上限,防失控(保险�
 SHELL_TIMEOUT = 60        # 秒;v1 沿用 v0,正式的超时/截断策略是 v3 的主题
 ENV_FILE = "/root/.env"   # API Key 兜底来源,环境变量优先
 
-SYSTEM_PROMPT = (
-    "你是 SproutCode(码苗),一个在终端里工作的 Coding Agent。\n"
-    "你可以调用工具读写文件、执行 shell 命令,帮用户完成编程任务。\n"
-    "- 动手优先:用工具实际完成,而不是只给建议;\n"
-    "- 工具报错时读错误信息,调整参数或命令后重试;\n"
-    "- 完成后用简短中文说明做了什么、结果如何。"
-)
+SESSIONS_DIR = os.path.expanduser("~/.sproutcode/sessions")  # 会话 JSONL 全局目录,不污染用户项目
+CONTEXT_BUDGET_TOKENS = 48_000  # 上下文预算(deepseek-chat 64K 窗口,近似估算偏低,再留余量)
+COMPACT_THRESHOLD = 0.7         # 估算超过预算的 70% 即触发压缩(spec §4.4 默认)
+KEEP_RECENT_TURNS = 4           # 压缩时保留最近 N 个 user 轮的原文
+MAX_SUMMARY_MSG_CHARS = 1_500   # 摘要输入中单条消息的截断长度,防摘要调用自爆上下文
 
 
 def load_api_key() -> str | None:
