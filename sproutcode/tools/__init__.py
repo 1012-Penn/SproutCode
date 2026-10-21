@@ -1,3 +1,19 @@
+"""工具子系统:注册表 + 从 Python 函数自动生成 OpenAI 工具 Schema。
+
+OpenAI function calling 的约定:客户端要随每次请求附上 tools 数组,描述
+"有哪些工具、各叫什么名字、参数是什么结构"(JSON Schema);模型决定调用
+时只回一个名字 + JSON 字符串参数,执行在客户端完成。很多项目手写这份
+Schema,和实现代码两头维护、极易漂移。
+
+本模块的做法是单一事实源:工具就是一个带类型注解和 docstring 的普通
+函数,@tool 装饰器用 inspect 反射自动生成 Schema——docstring 摘要即工具
+描述,Args 段即参数说明,类型注解即参数类型。改函数签名,Schema 跟着变。
+
+执行侧的统一出口是 ToolRegistry.execute:任何失败(未知工具/坏 JSON/
+函数抛异常)都转成 (错误文本, True) 回传给模型,让它自己纠正——
+"把异常变成模型可读的反馈"是 Agent 工具层的通用模式。
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -11,6 +27,12 @@ ToolFunc = Callable[..., Any]
 
 @dataclass(frozen=True)
 class ToolSpec:
+    """一个工具的完整定义:名字、描述、参数 Schema,加上可调用的实现本体。
+
+    Schema 与 func 放在同一个 frozen dataclass 里,保证"模型看到的"
+    和"实际执行的"永远来自同一份声明。
+    """
+
     name: str
     description: str
     parameters: dict[str, Any]
@@ -150,7 +172,12 @@ class ToolRegistry:
         ]
 
     def execute(self, name: str, arguments: str) -> tuple[str, bool]:
-        """统一执行入口:未知工具/坏 JSON/函数异常都转成错误文本。"""
+        """统一执行入口:未知工具/坏 JSON/函数异常都转成错误文本。
+
+        返回约定 (content, is_error) 是全项目的工具结果形态:错误不是异常
+        而是"给模型看的一段文字",is_error 仅供渲染层区分显示。模型看到
+        [ERROR] 后通常会自己修正参数重试,这就是 Agent 的自我纠错循环。
+        """
         try:
             spec = self._tools.get(name)
             if spec is None:
@@ -163,10 +190,14 @@ class ToolRegistry:
             return f"[ERROR] {type(exc).__name__}: {exc}", True
 
 
+# 全局注册表:模块导入一次,所有工具共享。测试要隔离时自己 new 一个
+# ToolRegistry,不碰这个全局实例。
 registry = ToolRegistry()
 tool = registry.tool
 
 # 装饰器与全局注册表就绪后再导入内置工具,导入即注册。
+# 必须放在文件末尾:如果放顶部,files/shell import 本模块时会拿到的还是
+# 未定义完的 tool,循环引用直接崩——"先备好注册表,再导入工具"是刻意的顺序。
 from . import files, shell  # noqa: E402,F401
 from .files import list_files, read_file, write_file  # noqa: E402,F401
 from .shell import run_shell  # noqa: E402,F401

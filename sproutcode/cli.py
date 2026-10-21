@@ -1,3 +1,17 @@
+"""命令行 REPL:把 Agent、会话存储和终端渲染粘合成用户可见的产品。
+
+分层位置:最上层模块,依赖 agent/client/sessions/prompts 全部下层。
+职责刻意保持"薄"——所有决策逻辑都在下层,这里只做三件事:
+
+1. 读用户输入,按首字符分派:斜杠命令(/help /resume /clear /exit)
+   本地处理,普通文本交给 agent.run;
+2. 用 Renderer 把 Agent 的回调事件(流式文本/工具调用/压缩提示)
+   渲染成终端输出,正文亮色、过程暗色;
+3. 把每轮成功的结果通过 on_turn_commit 回调交给 Session 落盘。
+
+入口链:python -m sproutcode → __main__.py → 这里的 main()。
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -30,7 +44,13 @@ def preview_arguments(arguments: str, limit: int = 60) -> str:
 
 
 class Renderer:
-    """正文亮色、过程暗色;流式文本到达时才打印一次对话前缀。"""
+    """正文亮色、过程暗色;流式文本到达时才打印一次对话前缀。
+
+    started 标志解决流式渲染的一个经典问题:收到第一个文本 chunk 之前,
+    我们不知道这轮模型是直接回答(要打 "码苗> " 前缀)还是只发工具调用
+    (不该有前缀)。所以前缀延迟到第一片文本到达时才打印。ANSI 转义码
+    (\\033[2m 等)是终端的标准暗色/重置指令,不需要 curses 之类的库。
+    """
 
     def __init__(self) -> None:
         self.started = False
@@ -157,6 +177,9 @@ def main(argv: list[str] | None = None) -> None:
         f"SproutCode(码苗)v{__version__} · {MODEL} · "
         f"会话 {state.session.meta.id} · /help 帮助"
     )
+    # 错误分级:Ctrl+C 视为正常操作(回退已由 Agent 内部完成,这里只需
+    # 安抚用户);其他异常(网络/认证等)统一打印 [API 错误] 后继续 REPL——
+    # 一次失败的请求不该让整个会话进程退出。
     while True:
         try:
             user = input("\n你> ").strip()

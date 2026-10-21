@@ -1,3 +1,12 @@
+"""内置文件工具:read_file / write_file / list_files。
+
+工具的"声明即注册":每个函数只写普通的 Python 函数 + Google 风格
+docstring,再挂上 @tool 装饰器,注册表就会从签名和 docstring 自动生成
+OpenAI function calling 需要的 JSON Schema(见 tools/__init__.py)。
+也就是说,函数的 docstring 不只是给人看的——它就是模型看到的工具说明书,
+直接决定模型会不会用、用得对不对。
+"""
+
 from __future__ import annotations
 
 import os
@@ -12,6 +21,9 @@ def read_file(path: str) -> str:
     Args:
         path: 文件路径。
     """
+    # 工具的返回值最终会整段塞进上下文喂给模型,所以这里故意不做
+    # 分页/截断——大文件的截断策略是 v3(权限安全与输出治理)的主题,
+    # 当前版本依赖系统提示词约束模型先 list 再选小文件读。
     with open(path, encoding="utf-8") as f:
         return f.read()
 

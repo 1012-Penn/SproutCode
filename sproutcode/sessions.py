@@ -1,3 +1,16 @@
+"""会话持久化:把每轮对话追加写进 JSONL 文件,支持恢复与列出。
+
+什么是 JSONL:每行一个独立的 JSON 对象(首行是会话元信息,之后每行
+一条消息)。为什么选它而不是一个大 JSON:逐行追加只需 open("a") 一行
+代码,天然抗中断——写了一半崩了,最多丢最后一行,前面的都完好;而改写
+大 JSON 必须整文件重序列化,既慢又危险。
+
+核心设计是"文件是完整事实":只追加、只重放、从不改写历史。上下文压缩
+(context.py)只发生在发给模型的内存视图里,所以任何时候 resume 都能
+拿回未压缩的完整对话。与 agent.py 的协作点:on_turn_commit 回调在每轮
+成功后调用 append_messages 落盘,中断轮不落盘。
+"""
+
 from __future__ import annotations
 
 import json
@@ -52,7 +65,13 @@ class Session:
         self.meta = meta
 
     def append_messages(self, messages: list[dict[str, Any]]) -> None:
-        """按轮粒度追加:一次 agent.run 成功后整轮写入,中断轮不落盘。"""
+        """按轮粒度追加:一次 agent.run 成功后整轮写入,中断轮不落盘。
+
+        轮粒度是刻意选择:如果逐条实时写,半轮崩掉会留下"有 tool_calls
+        但缺 tool 回复"的残缺历史,resume 重放后第一条 API 请求就 400
+        (与 agent.py 的 task_start 回退防的是同一个问题,这里是落盘侧)。
+        所有消息共用同一个时间戳,方便事后按轮分组。
+        """
         ts = datetime.now().isoformat(timespec="seconds")
         with open(self.path, "a", encoding="utf-8") as f:
             for message in messages:
