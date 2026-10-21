@@ -4,11 +4,14 @@ from typing import Callable
 
 from .client import ChatClient, TextCallback
 from .config import MAX_ROUNDS
+from .context import ContextManager
 from .prompts import load as load_prompt
 from .tools import ToolRegistry, registry as default_registry
 
 ToolCallCallback = Callable[[str, str], None]
 ToolResultCallback = Callable[[str, bool], None]
+TurnCommitCallback = Callable[[list[dict]], None]
+CompactCallback = Callable[[str], None]
 
 
 class Agent:
@@ -21,11 +24,12 @@ class Agent:
         registry: ToolRegistry | None = None,
         max_rounds: int = MAX_ROUNDS,
         system_prompt: str | None = None,
+        context: ContextManager | None = None,
     ) -> None:
         self.client = client
         self.registry = registry or default_registry
         self.max_rounds = max_rounds
-        # 提示词外置:默认读 prompts/system.txt,改提示词不用动代码。
+        # 提示词外置:默认读 prompts/system.txt,调提示词不用动代码。
         self.messages: list[dict] = [
             {
                 "role": "system",
@@ -36,6 +40,7 @@ class Agent:
                 ),
             }
         ]
+        self.context = context or ContextManager()
 
     def run(
         self,
@@ -44,8 +49,18 @@ class Agent:
         on_text: TextCallback | None = None,
         on_tool_call: ToolCallCallback | None = None,
         on_tool_result: ToolResultCallback | None = None,
+        on_turn_commit: TurnCommitCallback | None = None,
+        on_compact: CompactCallback | None = None,
     ) -> str:
         """处理一条用户消息,直到模型不再发起工具调用。"""
+        # 先压缩再进本轮:resume 重放出的超长历史也在这里被收敛。
+        # 压缩若失败,user 消息尚未入历史,不影响下方 task_start 的回退语义。
+        self.messages, note = self.context.maybe_compact(
+            self.messages, self.client
+        )
+        if note and on_compact is not None:
+            on_compact(note)
+
         # 记录本轮起点:失败/中断时把本轮 user 与半截 tool_calls 一起回退,
         # 否则残缺的 tool_call_id 会让下一次 API 请求直接 400。
         task_start = len(self.messages)
@@ -60,6 +75,8 @@ class Agent:
                 # 带 tool_calls 的 assistant 消息原样入历史,每个 call 都必须有 tool 回复。
                 self.messages.append(turn.to_message())
                 if not turn.tool_calls:
+                    if on_turn_commit is not None:
+                        on_turn_commit(self.messages[task_start:])
                     return turn.content or ""
 
                 for call in turn.tool_calls:
@@ -81,6 +98,8 @@ class Agent:
             fallback = "(已达单任务轮数上限,已停止。请把任务拆小后重试。)"
             if on_text is not None:
                 on_text(fallback)
+            if on_turn_commit is not None:
+                on_turn_commit(self.messages[task_start:])
             return fallback
         except BaseException:
             del self.messages[task_start:]

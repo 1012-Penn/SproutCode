@@ -905,8 +905,13 @@ def test_agent_does_not_commit_on_exception():
 
 
 def test_agent_compacts_at_run_start_with_toolless_summary_call():
+    # 两次 run 各消耗「一次摘要 + 一次正常对话」,共 4 份脚本:
+    # budget=10 下第一次 run 后历史仍超预算,第二次 run 起点会再压一次。
     client = FakeLLM(
-        AssistantTurn(content="早期摘要"), AssistantTurn(content="好的")
+        AssistantTurn(content="早期摘要"),
+        AssistantTurn(content="好的"),
+        AssistantTurn(content="再摘要"),
+        AssistantTurn(content="好"),
     )
     agent = Agent(
         client,
@@ -930,7 +935,9 @@ def test_agent_compacts_at_run_start_with_toolless_summary_call():
     assert client.requests[1]["tools"]              # 第二次是正常对话,带工具
     assert agent.messages[1]["role"] == "user"      # system 之后第一条是摘要注入
     assert "早期摘要" in agent.messages[1]["content"]
-    # 本轮提交的切片不含摘要(摘要不落盘)
+    # 本轮提交的切片不含摘要(摘要只存在于视图,永不落盘);
+    # 第二次 run 起点仍超预算会再压一次,但 task_start 在压缩之后,
+    # 提交切片仍精确始于本轮 user 消息。
     committed = []
     agent.run("再继续", on_turn_commit=committed.append)
     assert committed[0][0] == {"role": "user", "content": "再继续"}
