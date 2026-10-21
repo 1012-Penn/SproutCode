@@ -39,3 +39,4 @@
 - `docs/superpowers/specs/` — 设计文档(权威)
 - `docs/superpowers/plans/` — 各里程碑实现计划
 - `docs/journey/` — 演进笔记(面试叙述底稿)
+- `docs/reading-guide.md` — 成果阅读顺序(按版本更新)
